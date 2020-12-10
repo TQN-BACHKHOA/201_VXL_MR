@@ -1,0 +1,475 @@
+A51 MACRO ASSEMBLER  MR_VXL_TQN                                                           12/08/2020 09:40:50 PAGE     1
+
+
+MACRO ASSEMBLER A51 V8.02
+OBJECT MODULE PLACED IN MR_VXL_TQN.OBJ
+ASSEMBLER INVOKED BY: F:\Applications\KeilC 4\C51\BIN\A51.EXE MR_VXL_TQN.asm SET(SMALL) DEBUG EP
+
+LOC  OBJ            LINE     SOURCE
+
+  00B4                 1     LCD_E   BIT P3.4
+  00B5                 2     LCD_RS  BIT     P3.5
+  6000                 3     LCDADDR EQU     6000H
+                       4     
+  0030                 5     HOUR    EQU     30H
+  0031                 6     MINUTE  EQU     31H
+  0032                 7     SECOND  EQU     32H
+                       8     
+  0033                 9     MODE    EQU     33H
+  0034                10     SUB_MD  EQU     34H
+  0001                11     MD_SET  EQU     1
+  0002                12     MD_RUN  EQU     2
+  0003                13     MD_STOP EQU     3
+  000B                14     ST_HOUR EQU     11
+  000C                15     ST_MIN  EQU     12
+  000D                16     ST_SEC  EQU     13
+                      17     
+  0035                18     T0CNT   EQU     35H
+  F000                19     LOAD_T0 EQU     61440
+  000F                20     ROLL_T0 EQU     15
+                      21     
+  0078                22     TGL_BIT BIT     2FH.0
+  0079                23     OUT_SET BIT     2FH.1
+  0090                24     INC_SET BIT     P1.0
+  0091                25     DEC_SET BIT     P1.1
+  00B2                26     EX0_BUT BIT     P3.2
+                      27     
+  0005                28     COL_LCD EQU     05H
+  0004                29     ROW_LCD EQU     04H
+                      30     
+                      31     
+0000                  32     ORG             0000H
+0000 020030           33     LJMP    MAIN
+                      34     
+0003                  35     ORG             0003H
+0003 020086           36     LJMP    E0ISR
+                      37     
+000B                  38     ORG             000BH
+000B 0200D7           39     LJMP    T0ISR
+                      40     
+0030                  41     ORG             0030H
+0030                  42     MAIN:
+                      43             ; Initialize generally
+0030 753303           44             MOV             MODE, #MD_STOP
+0033 75340B           45             MOV             SUB_MD, #ST_HOUR
+                      46     
+                      47             ; Initialize Timer 0 Mode 1
+0036 758901           48             MOV             TMOD, #01H
+0039 75350F           49             MOV             T0CNT, #ROLL_T0
+                      50     
+                      51             ; Initialize Interrupt
+003C D2AF             52             SETB    EA
+003E D2A9             53             SETB    ET0
+0040 D2A8             54             SETB    EX0
+0042 D2B8             55             SETB    PX0
+0044 D288             56             SETB    IT0
+                      57     
+                      58             ; Initialize LCD 16x2
+A51 MACRO ASSEMBLER  MR_VXL_TQN                                                           12/08/2020 09:40:50 PAGE     2
+
+0046 906000           59             MOV             DPTR, #LCDADDR
+0049 319E             60             ACALL   CLEAR
+004B 3191             61             ACALL   INIT_LCD
+                      62             ; Force External Interrupt
+004D C2B2             63             CLR             INT0     
+004F                  64             MAIN_LOOP:
+004F 207902           65                     JB              OUT_SET, MAIN_SETTING
+0052 8002             66                     JMP             MAIN_OUT        
+0054                  67                     MAIN_SETTING:
+0054 115A             68                             ACALL   SETTING_TOTAL
+0056                  69                     MAIN_OUT:
+0056 11EC             70                     ACALL   DISPLAY_LCD     
+                      71             
+0058 80F5             72             SJMP    MAIN_LOOP
+                      73     
+005A                  74     SETTING_TOTAL: ;Put register hour/minute/second to R0
+005A E6               75             MOV             A, @R0
+                      76             
+005B                  77             SETTING_INCREASE:
+005B 20900D           78             JB              INC_SET, SETTING_DECREASE
+005E 117D             79             ACALL   DELAY_100MS
+0060 209008           80             JB              INC_SET, SETTING_DECREASE
+0063 117D             81             ACALL   DELAY_100MS
+0065 309003           82             JNB             INC_SET, SETTING_DECREASE
+0068 04               83             INC             A
+0069 8010             84             JMP             OUT_SETTING
+                      85     
+006B                  86             SETTING_DECREASE:
+006B 20910D           87             JB              DEC_SET, OUT_SETTING
+006E 117D             88             ACALL   DELAY_100MS
+0070 209108           89             JB              DEC_SET, OUT_SETTING
+0073 117D             90             ACALL   DELAY_100MS
+0075 309103           91             JNB             DEC_SET, OUT_SETTING
+0078 6001             92             JZ              OUT_SETTING
+007A 14               93             DEC             A       
+                      94     
+007B                  95             OUT_SETTING:
+007B F6               96             MOV             @R0, A
+007C 22               97             RET
+                      98     
+007D                  99     DELAY_100MS:
+007D 7EC8            100             MOV             R6, #200
+007F                 101             LOOP_DELAY_75MS:
+007F 7FFA            102                     MOV     R7, #250
+0081 DFFE            103                     DJNZ    R7, $
+0083 DEFA            104                     DJNZ    R6, LOOP_DELAY_75MS     
+0085 22              105             RET
+                     106     
+                     107     ; Interrupts below
+0086                 108     E0ISR:
+0086 117D            109             ACALL   DELAY_100MS             
+0088 20B249          110             JB              EX0_BUT, EX0_OUT
+008B 117D            111             ACALL   DELAY_100MS
+008D 30B244          112             JNB             EX0_BUT, EX0_OUT
+                     113     
+0090 E533            114             MOV             A, MODE
+0092                 115             EX0_SETTING:
+0092 B40126          116                     CJNE    A, #MD_SET, EX0_RUNNING
+0095 E534            117                     MOV             A, SUB_MD
+                     118     
+0097                 119                     EX0_SET_HOUR:
+0097 B40B09          120                             CJNE    A, #ST_HOUR, EX0_SET_MINUTE
+009A 75340C          121                             MOV             SUB_MD, #ST_MIN
+009D 7831            122                             MOV             R0, #MINUTE
+009F D279            123                             SETB    OUT_SET
+00A1 8031            124                             JMP             EX0_OUT
+A51 MACRO ASSEMBLER  MR_VXL_TQN                                                           12/08/2020 09:40:50 PAGE     3
+
+                     125     
+00A3                 126                     EX0_SET_MINUTE:
+00A3 B40C09          127                             CJNE    A, #ST_MIN, EX0_SET_SECOND
+00A6 75340D          128                             MOV             SUB_MD, #ST_SEC
+00A9 7832            129                             MOV             R0, #SECOND
+00AB D279            130                             SETB    OUT_SET
+00AD 8025            131                             JMP             EX0_OUT
+                     132     
+00AF                 133                     EX0_SET_SECOND:
+00AF B40D09          134                             CJNE    A, #ST_SEC, EX0_RUNNING
+00B2 753302          135                             MOV             MODE, #MD_RUN
+00B5 C279            136                             CLR             OUT_SET
+00B7 D28D            137                             SETB    TF0
+00B9 8019            138                             JMP             EX0_OUT
+                     139     
+00BB                 140             EX0_RUNNING:
+00BB B40209          141                     CJNE    A, #MD_RUN, EX0_STOPPED
+00BE 753303          142                     MOV             MODE, #MD_STOP
+00C1 C28C            143                     CLR             TR0
+00C3 C28D            144                     CLR             TF0
+00C5 800D            145                     JMP             EX0_OUT
+                     146             
+00C7                 147             EX0_STOPPED:
+00C7 B4030A          148                     CJNE    A, #MD_STOP, EX0_OUT
+00CA 753301          149                     MOV             MODE, #MD_SET
+00CD 75340B          150                     MOV             SUB_MD, #ST_HOUR
+00D0 7830            151                     MOV             R0, #HOUR
+00D2 D279            152                     SETB    OUT_SET
+                     153     
+00D4                 154             EX0_OUT:
+00D4 D2B2            155                     SETB    INT0
+00D6 32              156             RETI
+                     157     
+00D7                 158     T0ISR:
+00D7 D53507          159             DJNZ    T0CNT, RUNT0
+00DA 75350F          160             MOV             T0CNT, #ROLL_T0
+00DD B278            161             CPL             TGL_BIT
+00DF 0532            162             INC             SECOND
+00E1                 163             RUNT0:
+00E1 C28C            164                     CLR             TR0
+00E3 758C10          165                     MOV             TH0, #HIGH(-LOAD_T0)
+00E6 758A00          166                     MOV             TL0, #LOW(-LOAD_T0)
+00E9 D28C            167                     SETB    TR0
+00EB 32              168             RETI
+                     169     
+                     170     ; LCD Functions below
+00EC                 171     DISPLAY_LCD:
+00EC 750504          172             MOV             COL_LCD, #4
+00EF 750401          173             MOV             ROW_LCD, #1
+00F2 317F            174             ACALL   GOTOXY 
+00F4 E533            175             MOV             A, MODE
+00F6                 176             SETTING_MODE:
+00F6 B40124          177                     CJNE    A, #MD_SET, RUNNING_MODE
+00F9 E534            178                     MOV             A, SUB_MD
+00FB                 179                     SET_HOUR_MODE:
+00FB B40B06          180                             CJNE    A, #ST_HOUR, SET_MINUTE_MODE
+00FE 7468            181                             MOV             A, #'h'
+0100 31B8            182                             ACALL   WRITETEXT
+0102 8010            183                             JMP             OUT_SETTING_MODE
+0104                 184                     SET_MINUTE_MODE:
+0104 B40C06          185                             CJNE    A, #ST_MIN, SET_SECOND_MODE
+0107 746D            186                             MOV             A, #'m'
+0109 31B8            187                             ACALL   WRITETEXT
+010B 8007            188                             JMP             OUT_SETTING_MODE
+010D                 189                     SET_SECOND_MODE:
+010D B40D04          190                             CJNE    A, #ST_SEC, OUT_SETTING_MODE
+A51 MACRO ASSEMBLER  MR_VXL_TQN                                                           12/08/2020 09:40:50 PAGE     4
+
+0110 7473            191                             MOV             A, #'s'
+0112 31B8            192                             ACALL   WRITETEXT
+0114                 193                     OUT_SETTING_MODE:
+0114 745F            194                     MOV             A, #'_'
+0116 31B8            195                     ACALL   WRITETEXT
+0118 9001E4          196                     MOV             DPTR, #MESSAGE_SETTING
+011B 800E            197                     JMP             OUTPUTLCD
+                     198      
+011D                 199             RUNNING_MODE:
+011D B40205          200                     CJNE    A, #MD_RUN, STOPPED_MODE
+0120 9001F6          201                     MOV             DPTR, #MESSAGE_RUNNING
+0123 8006            202                     JMP             OUTPUTLCD
+                     203             
+0125                 204             STOPPED_MODE:
+0125 B40303          205                     CJNE    A, #MD_STOP, OUTPUTLCD
+0128 9001EC          206                     MOV             DPTR, #MESSAGE_STOPPED
+                     207     
+012B                 208             OUTPUTLCD:
+012B 31CD            209                     ACALL   SUB_DISPLAY_LCD
+                     210     
+012D AA32            211                     MOV             R2, SECOND
+012F BA3C05          212                     CJNE    R2, #60, CHECK_MINUTE
+0132 753200          213                     MOV             SECOND, #0
+0135 0531            214                     INC             MINUTE
+                     215                 
+0137                 216                     CHECK_MINUTE:
+0137 AA31            217                     MOV             R2, MINUTE
+0139 BA3C05          218                     CJNE    R2, #60, CHECK_HOUR
+013C 753100          219                     MOV             MINUTE, #0
+013F 0530            220                     INC             HOUR
+                     221             
+0141                 222                     CHECK_HOUR:
+0141 AA30            223                     MOV             R2, HOUR
+0143 BA1803          224                     CJNE    R2, #24, SUB_OUTPUTLCD
+0146 753000          225                     MOV             HOUR, #0
+                     226     
+0149                 227                     SUB_OUTPUTLCD:
+0149 750504          228                     MOV             COL_LCD, #4
+014C 750400          229                     MOV             ROW_LCD, #0
+014F 317F            230                     ACALL   GOTOXY
+                     231                     ; Write hour
+0151 E530            232                     MOV             A, HOUR
+0153 3162            233                     ACALL   WRITENUMBER
+0155 3171            234                     ACALL   WRITECOLON
+                     235                     ; Write minute
+0157 E531            236                     MOV             A, MINUTE
+0159 3162            237                     ACALL   WRITENUMBER
+015B 3171            238                     ACALL   WRITECOLON
+                     239                     ; Write second
+015D E532            240                     MOV             A, SECOND
+015F 3162            241                     ACALL   WRITENUMBER
+0161 22              242             RET
+0162                 243     WRITENUMBER:   ; Move register hour/minute/second to A
+0162 75F00A          244             MOV             B, #10
+0165 84              245             DIV             AB
+0166 2430            246             ADD             A, #30H
+0168 31B8            247             ACALL   WRITETEXT
+016A E5F0            248             MOV             A, B
+016C 2430            249             ADD             A, #30H
+016E 31B8            250             ACALL   WRITETEXT
+0170 22              251             RET
+                     252     
+0171                 253     WRITECOLON:
+0171 207806          254             JB              TGL_BIT, NO_COLON
+0174                 255             COLON:
+0174 743A            256                     MOV             A, #':'
+A51 MACRO ASSEMBLER  MR_VXL_TQN                                                           12/08/2020 09:40:50 PAGE     5
+
+0176 31B8            257                     ACALL   WRITETEXT
+0178 8004            258                     SJMP    $+6
+017A                 259             NO_COLON:
+017A 7420            260                     MOV             A, #' '
+017C 31B8            261                     ACALL   WRITETEXT
+017E 22              262             RET
+                     263     
+017F                 264     GOTOXY: ; Column: R5 (#0->#15); Row: R4 (#0->#1)
+017F D3              265             SETB    C
+0180 E504            266             MOV             A, ROW_LCD
+0182 C004            267             PUSH    ROW_LCD
+0184 0504            268             INC             ROW_LCD
+0186                 269             LOOP_GOTOXY:
+0186 13              270                     RRC             A
+0187 D504FC          271                     DJNZ    ROW_LCD, LOOP_GOTOXY
+018A D004            272             POP             ROW_LCD
+018C 2505            273             ADD             A, COL_LCD
+018E 31A3            274             ACALL   WRITECOM
+0190 22              275             RET
+                     276     
+0191                 277     INIT_LCD:
+0191 7438            278             MOV             A, #38H
+0193 31A3            279             ACALL   WRITECOM
+0195 740C            280             MOV             A, #0CH
+0197 31A3            281             ACALL   WRITECOM
+0199 7406            282             MOV             A, #06H
+019B 31A3            283             ACALL   WRITECOM
+019D 22              284             RET
+                     285     
+019E                 286     CLEAR:
+019E 7401            287             MOV             A, #01H
+01A0 31A3            288             ACALL   WRITECOM
+01A2 22              289             RET
+                     290     
+01A3                 291     WRITECOM:
+01A3 C083            292             PUSH    DPH
+01A5 C082            293             PUSH    DPL
+01A7 906000          294             MOV             DPTR, #LCDADDR
+01AA D2B4            295             SETB    LCD_E
+01AC C2B5            296             CLR             LCD_RS
+01AE F0              297             MOVX    @DPTR, A
+01AF C2B4            298             CLR             LCD_E
+01B1 31DB            299             ACALL   WAIT_LCD
+01B3 D082            300             POP             DPL
+01B5 D083            301             POP             DPH
+01B7 22              302             RET
+                     303     
+01B8                 304     WRITETEXT:
+01B8 C083            305             PUSH    DPH
+01BA C082            306             PUSH    DPL
+01BC 906000          307             MOV             DPTR, #LCDADDR
+01BF D2B4            308             SETB    LCD_E
+01C1 D2B5            309             SETB    LCD_RS
+01C3 F0              310             MOVX    @DPTR, A
+01C4 C2B4            311             CLR             LCD_E
+01C6 31DB            312             ACALL   WAIT_LCD
+01C8 D082            313             POP             DPL
+01CA D083            314             POP             DPH
+01CC 22              315             RET
+                     316     
+01CD                 317     SUB_DISPLAY_LCD: ; Store string address in DPTR
+01CD 7400            318             MOV             A, #0
+01CF                 319             LOOP_SUB_DISPLAY:
+01CF F9              320                     MOV             R1, A
+01D0 93              321                     MOVC    A, @A+DPTR
+01D1 6007            322                     JZ              EXIT_SUB_DISPLAY
+A51 MACRO ASSEMBLER  MR_VXL_TQN                                                           12/08/2020 09:40:50 PAGE     6
+
+01D3 31B8            323                     ACALL   WRITETEXT
+01D5 E9              324                     MOV             A, R1
+01D6 04              325                     INC     A
+01D7 D5F0F5          326                     DJNZ    B, LOOP_SUB_DISPLAY
+01DA                 327             EXIT_SUB_DISPLAY:
+01DA 22              328             RET
+                     329     
+01DB                 330     WAIT_LCD:
+01DB 7E0A            331             MOV             R6, #10
+01DD                 332             LOOP_WAIT_LCD:
+01DD 7FFA            333                     MOV     R7, #250
+01DF DFFE            334                     DJNZ    R7, $
+01E1 DEFA            335                     DJNZ    R6, LOOP_WAIT_LCD
+01E3 22              336             RET
+                     337               
+01E4                 338     MESSAGE_SETTING:
+01E4 53455454        339             DB      "SETTING",0
+01E8 494E4700                
+01EC                 340     MESSAGE_STOPPED:
+01EC 53544F50        341             DB      "STOPPED  ",0
+01F0 50454420                
+01F4 2000                    
+01F6                 342     MESSAGE_RUNNING:
+01F6 52554E4E        343             DB      "RUNNING..",0
+01FA 494E472E                
+01FE 2E00                    
+                     344     
+                     345     END
+A51 MACRO ASSEMBLER  MR_VXL_TQN                                                           12/08/2020 09:40:50 PAGE     7
+
+SYMBOL TABLE LISTING
+------ ----- -------
+
+
+N A M E             T Y P E  V A L U E   ATTRIBUTES
+
+B. . . . . . . . .  D ADDR   00F0H   A   
+CHECK_HOUR . . . .  C ADDR   0141H   A   
+CHECK_MINUTE . . .  C ADDR   0137H   A   
+CLEAR. . . . . . .  C ADDR   019EH   A   
+COLON. . . . . . .  C ADDR   0174H   A   
+COL_LCD. . . . . .  N NUMB   0005H   A   
+DEC_SET. . . . . .  B ADDR   0090H.1 A   
+DELAY_100MS. . . .  C ADDR   007DH   A   
+DISPLAY_LCD. . . .  C ADDR   00ECH   A   
+DPH. . . . . . . .  D ADDR   0083H   A   
+DPL. . . . . . . .  D ADDR   0082H   A   
+E0ISR. . . . . . .  C ADDR   0086H   A   
+EA . . . . . . . .  B ADDR   00A8H.7 A   
+ET0. . . . . . . .  B ADDR   00A8H.1 A   
+EX0. . . . . . . .  B ADDR   00A8H.0 A   
+EX0_BUT. . . . . .  B ADDR   00B0H.2 A   
+EX0_OUT. . . . . .  C ADDR   00D4H   A   
+EX0_RUNNING. . . .  C ADDR   00BBH   A   
+EX0_SETTING. . . .  C ADDR   0092H   A   
+EX0_SET_HOUR . . .  C ADDR   0097H   A   
+EX0_SET_MINUTE . .  C ADDR   00A3H   A   
+EX0_SET_SECOND . .  C ADDR   00AFH   A   
+EX0_STOPPED. . . .  C ADDR   00C7H   A   
+EXIT_SUB_DISPLAY .  C ADDR   01DAH   A   
+GOTOXY . . . . . .  C ADDR   017FH   A   
+HOUR . . . . . . .  N NUMB   0030H   A   
+INC_SET. . . . . .  B ADDR   0090H.0 A   
+INIT_LCD . . . . .  C ADDR   0191H   A   
+INT0 . . . . . . .  B ADDR   00B0H.2 A   
+IT0. . . . . . . .  B ADDR   0088H.0 A   
+LCDADDR. . . . . .  N NUMB   6000H   A   
+LCD_E. . . . . . .  B ADDR   00B0H.4 A   
+LCD_RS . . . . . .  B ADDR   00B0H.5 A   
+LOAD_T0. . . . . .  N NUMB   F000H   A   
+LOOP_DELAY_75MS. .  C ADDR   007FH   A   
+LOOP_GOTOXY. . . .  C ADDR   0186H   A   
+LOOP_SUB_DISPLAY .  C ADDR   01CFH   A   
+LOOP_WAIT_LCD. . .  C ADDR   01DDH   A   
+MAIN . . . . . . .  C ADDR   0030H   A   
+MAIN_LOOP. . . . .  C ADDR   004FH   A   
+MAIN_OUT . . . . .  C ADDR   0056H   A   
+MAIN_SETTING . . .  C ADDR   0054H   A   
+MD_RUN . . . . . .  N NUMB   0002H   A   
+MD_SET . . . . . .  N NUMB   0001H   A   
+MD_STOP. . . . . .  N NUMB   0003H   A   
+MESSAGE_RUNNING. .  C ADDR   01F6H   A   
+MESSAGE_SETTING. .  C ADDR   01E4H   A   
+MESSAGE_STOPPED. .  C ADDR   01ECH   A   
+MINUTE . . . . . .  N NUMB   0031H   A   
+MODE . . . . . . .  N NUMB   0033H   A   
+NO_COLON . . . . .  C ADDR   017AH   A   
+OUTPUTLCD. . . . .  C ADDR   012BH   A   
+OUT_SET. . . . . .  B ADDR   002FH.1 A   
+OUT_SETTING. . . .  C ADDR   007BH   A   
+OUT_SETTING_MODE .  C ADDR   0114H   A   
+P1 . . . . . . . .  D ADDR   0090H   A   
+P3 . . . . . . . .  D ADDR   00B0H   A   
+PX0. . . . . . . .  B ADDR   00B8H.0 A   
+ROLL_T0. . . . . .  N NUMB   000FH   A   
+ROW_LCD. . . . . .  N NUMB   0004H   A   
+A51 MACRO ASSEMBLER  MR_VXL_TQN                                                           12/08/2020 09:40:50 PAGE     8
+
+RUNNING_MODE . . .  C ADDR   011DH   A   
+RUNT0. . . . . . .  C ADDR   00E1H   A   
+SECOND . . . . . .  N NUMB   0032H   A   
+SETTING_DECREASE .  C ADDR   006BH   A   
+SETTING_INCREASE .  C ADDR   005BH   A   
+SETTING_MODE . . .  C ADDR   00F6H   A   
+SETTING_TOTAL. . .  C ADDR   005AH   A   
+SET_HOUR_MODE. . .  C ADDR   00FBH   A   
+SET_MINUTE_MODE. .  C ADDR   0104H   A   
+SET_SECOND_MODE. .  C ADDR   010DH   A   
+STOPPED_MODE . . .  C ADDR   0125H   A   
+ST_HOUR. . . . . .  N NUMB   000BH   A   
+ST_MIN . . . . . .  N NUMB   000CH   A   
+ST_SEC . . . . . .  N NUMB   000DH   A   
+SUB_DISPLAY_LCD. .  C ADDR   01CDH   A   
+SUB_MD . . . . . .  N NUMB   0034H   A   
+SUB_OUTPUTLCD. . .  C ADDR   0149H   A   
+T0CNT. . . . . . .  N NUMB   0035H   A   
+T0ISR. . . . . . .  C ADDR   00D7H   A   
+TF0. . . . . . . .  B ADDR   0088H.5 A   
+TGL_BIT. . . . . .  B ADDR   002FH.0 A   
+TH0. . . . . . . .  D ADDR   008CH   A   
+TL0. . . . . . . .  D ADDR   008AH   A   
+TMOD . . . . . . .  D ADDR   0089H   A   
+TR0. . . . . . . .  B ADDR   0088H.4 A   
+WAIT_LCD . . . . .  C ADDR   01DBH   A   
+WRITECOLON . . . .  C ADDR   0171H   A   
+WRITECOM . . . . .  C ADDR   01A3H   A   
+WRITENUMBER. . . .  C ADDR   0162H   A   
+WRITETEXT. . . . .  C ADDR   01B8H   A   
+
+
+REGISTER BANK(S) USED: 0 
+
+
+ASSEMBLY COMPLETE.  0 WARNING(S), 0 ERROR(S)
